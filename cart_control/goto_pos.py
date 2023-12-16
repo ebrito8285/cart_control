@@ -18,9 +18,10 @@ class GoToPosNode(Node):
             10)
         self.bridge = CvBridge()
         self.detector = apriltag.Detector()
-        self.target_x = 320  # need to calibrate
-        self.target_y = 240  # need to calibrate
-        self.aligning_phase = True  
+        self.target_x = 320  
+        self.target_y = 240  
+        self.aligning_phase = True
+        self.initial_spin_complete = False 
         
     def image_callback(self, msg):
         try:
@@ -31,6 +32,14 @@ class GoToPosNode(Node):
         gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
         tags = self.detector.detect(gray)
 
+        if not self.initial_spin_complete:
+            # Publish an initial Twist message to make the robot spin in place
+            twist = Twist()
+            twist.angular.z = 0.2
+            self.publisher_.publish(twist)
+            rclpy.sleep(1.0)
+            self.initial_spin_complete = True
+
         for tag in tags:
             # Compute the error between the tag's position and target position
             error_x = tag.center[0] - self.target_x
@@ -39,13 +48,11 @@ class GoToPosNode(Node):
             twist = Twist()
 
             if self.aligning_phase:
-                # Align horizontally first
                 if abs(error_x) > 10:  # Threshold to consider as aligned
                     twist.angular.z = -error_x * 0.01
                 else:
                     self.aligning_phase = False
             else:
-                # Then move vertically
                 if abs(error_y) > 10:
                     twist.linear.x = -error_y * 0.01
 
